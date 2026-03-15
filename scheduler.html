@@ -200,18 +200,9 @@ textarea.field-inp { resize: none; height: 72px; font-size: 13px; }
 
     <!-- Settings pane -->
     <div class="pane" id="pane-settings">
-      <div class="api-setup" id="api-setup">
-        <div class="api-setup-title">Gemini API キー設定</div>
-        <div class="api-setup-desc">
-          AIスケジュール機能を使うには Google の Gemini API キーが必要です。<br>
-          キーはこの端末のみに保存され、外部には送信されません。<br>
-          <a href="https://aistudio.google.com" target="_blank" style="color:var(--orange)">aistudio.google.com</a> で取得できます（無料）。
-        </div>
-        <input class="api-inp" type="password" id="api-key-inp" placeholder="sk-ant-...">
-        <div style="display:flex;align-items:center">
-          <button class="api-save-btn" onclick="saveApiKey()">保存</button>
-          <span class="api-saved" id="api-saved" style="display:none">✓ 保存しました</span>
-        </div>
+      <div style="background:var(--bg2);border:0.5px solid var(--accent);border-radius:var(--r-lg);padding:16px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:6px">✦ AIスケジュール機能について</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.7">APIキー・費用は一切不要です。<br>タスクの期限・優先度・作業時間をもとに、自動でスケジュールを組み立てます。</div>
       </div>
 
       <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r-lg);padding:16px;margin-bottom:12px">
@@ -537,70 +528,94 @@ function showTab(name, btn) {
 
 // ── AI Schedule ────────────────────────────────────────────
 async function runSchedule() {
-  const apiKey = localStorage.getItem('hpc-apikey');
-  if (!apiKey) {
-    alert('設定タブでAPIキーを入力してください。');
-    showTab('settings', document.querySelectorAll('.tab')[2]);
-    return;
-  }
   const btn = document.getElementById('ai-btn');
   const icon = document.getElementById('ai-icon');
   const text = document.getElementById('ai-text');
   const out = document.getElementById('sched-out');
   btn.disabled = true;
   icon.outerHTML = `<div id="ai-icon" class="spinner"></div>`;
-  text.textContent = 'スケジュールを生成中...';
+  text.textContent = 'スケジュールを組み立て中...';
   document.getElementById('changed-notice').style.display = 'none';
+  out.innerHTML = `<div style="color:var(--text3);font-size:12px;text-align:center;padding:2rem">計算中...</div>`;
 
-  const today = new Date().toISOString().split('T')[0];
+  await new Promise(r => setTimeout(r, 600));
+
+  const hoursNormal = parseFloat(document.getElementById('hours-normal').value);
+  const hoursSurvey = parseFloat(document.getElementById('hours-survey').value);
   const pending = tasks.filter(t => !t.done);
-  const hoursNormal = document.getElementById('hours-normal').value;
-  const hoursSurvey = document.getElementById('hours-survey').value;
 
-  const prompt = `あなたはタスクスケジューリングAIです。以下のタスクリストをもとに、今日から始まる実務スケジュールをJSON形式で返してください。
+  // Priority score: deadline proximity + priority weight
+  const PRI_W = { high: 0, mid: 3, low: 7 };
+  const scored = pending.map(t => {
+    const dl = t.dl ? daysLeft(t.dl) : 99;
+    const score = (dl < 0 ? dl * 3 : dl) + PRI_W[t.pri];
+    return { ...t, score };
+  }).sort((a, b) => a.score - b.score);
 
-今日の日付: ${today}
-通常日の作業可能時間: ${hoursNormal}時間
-調査業務(survey)がある日の他の作業可能時間: ${hoursSurvey}時間
+  // Build day slots starting from today
+  const DAYS_JP = ['日','月','火','水','木','金','土'];
+  const schedule = [];
+  let dayOffset = 0;
+  let taskQueue = [...scored];
 
-タスクリスト:
-${pending.map(t => `- ID:${t.id} | ${t.name} | カテゴリ:${CATS[t.cat]?.l} | 期限:${t.dl || '未設定'} | 所要時間:${t.hrs}h | 優先度:${t.pri}`).join('\n')}
+  while (taskQueue.length > 0 && dayOffset < 30) {
+    const date = new Date();
+    date.setDate(date.getDate() + dayOffset);
+    const dow = date.getDay();
+    const dateStr = date.toISOString().split('T')[0];
+    const label = `${date.getMonth()+1}月${date.getDate()}日(${DAYS_JP[dow]})`;
+    const isWeekend = dow === 0 || dow === 6;
 
-スケジューリングのルール:
-1. 期限が近いもの・優先度が高いものを先に割り当てる
-2. 1日の合計作業時間が上限を超えないよう分散
-3. 調査業務(survey)は1日に複数日分をまとめず毎日少量ずつ割り当てる
-4. 関連カテゴリのタスクは同じ日にまとめると効率的
-5. 期限のないタスクは余裕がある日に割り当てる
-6. 週末（土日）は作業量を半分程度にする
+    // Check if survey task is scheduled today
+    const hasSurvey = taskQueue.some(t => t.cat === 'survey');
+    let capacity = isWeekend
+      ? (hasSurvey ? hoursSurvey * 0.5 : hoursNormal * 0.5)
+      : (hasSurvey ? hoursSurvey : hoursNormal);
 
-以下のJSON形式のみで返してください（前置き・説明文・マークダウン記法は不要）:
-{"schedule":[{"date":"YYYY-MM-DD","label":"M月D日(曜)","total_hours":数値,"tasks":[{"name":"タスク名","cat":"カテゴリID","hrs":数値,"note":"一言アドバイス"}]}],"summary":"全体の一言コメント（60字以内）"}`;
+    const dayTasks = [];
+    let used = 0;
 
-  out.innerHTML = `<div style="color:var(--text3);font-size:12px;text-align:center;padding:2rem">生成中...</div>`;
+    // Assign survey task first if exists
+    const surveyIdx = taskQueue.findIndex(t => t.cat === 'survey');
+    if (surveyIdx !== -1) {
+      const st = taskQueue[surveyIdx];
+      const h = Math.min(st.hrs, isWeekend ? 3 : 6);
+      dayTasks.push({ name: st.name, cat: st.cat, hrs: h, note: '調査業務（通常稼働）' });
+      used += h;
+      taskQueue.splice(surveyIdx, 1);
+    }
 
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2000, temperature: 0.3 } })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || 'APIエラー');
-    const raw = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
-    const clean = raw.replace(/```json|```/g, '').trim();
-    let parsed;
-    try { parsed = JSON.parse(clean); }
-    catch { const m = clean.match(/\{[\s\S]*\}/); if (m) parsed = JSON.parse(m[0]); }
-    if (parsed) renderSchedule(parsed);
-    else out.innerHTML = `<pre style="font-size:11px;color:var(--text2);white-space:pre-wrap;padding:1rem">${raw}</pre>`;
-  } catch(e) {
-    out.innerHTML = `<div class="empty-state" style="color:var(--red)">エラー: ${e.message}</div>`;
+    // Fill remaining capacity with other tasks
+    let i = 0;
+    while (i < taskQueue.length && used < capacity) {
+      const t = taskQueue[i];
+      if (t.cat === 'survey') { i++; continue; }
+      if (used + t.hrs <= capacity + 0.5) {
+        const note = t.dl
+          ? (daysLeft(t.dl) <= 3 ? '⚠ 期限が迫っています！' : daysLeft(t.dl) <= 7 ? '今週中に完了を' : '')
+          : '';
+        dayTasks.push({ name: t.name, cat: t.cat, hrs: t.hrs, note });
+        used += t.hrs;
+        taskQueue.splice(i, 1);
+      } else { i++; }
+    }
+
+    if (dayTasks.length > 0) {
+      schedule.push({ date: dateStr, label, total_hours: Math.round(used * 10) / 10, tasks: dayTasks });
+    }
+    dayOffset++;
   }
+
+  const overdue = tasks.filter(t => !t.done && t.dl && daysLeft(t.dl) < 0).length;
+  const summary = overdue > 0
+    ? `期限超過が${overdue}件あります。今日から集中して取り組みましょう。`
+    : `${pending.length}件のタスクを${schedule.length}日間に分散しました。無理のないペースで進めましょう。`;
+
+  renderSchedule({ schedule, summary });
 
   btn.disabled = false;
   document.getElementById('ai-icon').outerHTML = `<span id="ai-icon">✦</span>`;
-  text.textContent = 'AIでスケジュールを組み直す';
+  text.textContent = 'スケジュールを組み直す';
   changed = false;
 }
 
