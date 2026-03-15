@@ -307,7 +307,9 @@ const PHASES = [
 ];
 
 // ── State ──────────────────────────────────────────────────
-let tasks = JSON.parse(localStorage.getItem('hpc-v3') || 'null') || [
+const _savedRaw = localStorage.getItem('hpc-v3');
+const _savedParsed = _savedRaw ? JSON.parse(_savedRaw) : null;
+let tasks = (_savedParsed && Array.isArray(_savedParsed) && _savedParsed.length > 0) ? _savedParsed : [
   {id:1, name:'商工会に電話→4/1設立で計画書認定の期限を確認', cat:'legal', dl:'2026-03-17', hrs:0.5, pri:'high', ph:'p1', done:false, note:'「4月1日設立予定。特定創業支援の認定はいつまでに計画書を提出すれば間に合いますか」と聞く'},
   {id:2, name:'定款の作成開始（マネーフォワード会社設立）', cat:'legal', dl:'2026-03-21', hrs:3, pri:'high', ph:'p1', done:false, note:'商号：H.P.canvas　目的欄に写真・映像・体験ツアー・調査業務を幅広く記載'},
   {id:3, name:'白タク規制の方針を確認（商工会または行政書士）', cat:'legal', dl:'2026-03-21', hrs:1, pri:'high', ph:'p1', done:false, note:'体験料に含める形にするか、タクシー会社と提携するか、法人設立前に決めておく'},
@@ -346,7 +348,10 @@ function loadSettings() {
   if (s.hoursNormal) document.getElementById('hours-normal').value = s.hoursNormal;
   if (s.hoursSurvey) document.getElementById('hours-survey').value = s.hoursSurvey;
   const k = localStorage.getItem('hpc-apikey');
-  if (k) { document.getElementById('api-key-inp').value = k; document.getElementById('api-saved').style.display = 'inline'; }
+  const _apiInp = document.getElementById('api-key-inp');
+  const _apiSaved = document.getElementById('api-saved');
+  if (k && _apiInp) { _apiInp.value = k; }
+  if (k && _apiSaved) { _apiSaved.style.display = 'inline'; }
 }
 function saveApiKey() {
   const k = document.getElementById('api-key-inp').value.trim();
