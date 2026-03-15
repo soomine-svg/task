@@ -201,11 +201,11 @@ textarea.field-inp { resize: none; height: 72px; font-size: 13px; }
     <!-- Settings pane -->
     <div class="pane" id="pane-settings">
       <div class="api-setup" id="api-setup">
-        <div class="api-setup-title">Claude API キー設定</div>
+        <div class="api-setup-title">Gemini API キー設定</div>
         <div class="api-setup-desc">
-          AIスケジュール機能を使うには Anthropic の API キーが必要です。<br>
+          AIスケジュール機能を使うには Google の Gemini API キーが必要です。<br>
           キーはこの端末のみに保存され、外部には送信されません。<br>
-          <a href="https://console.anthropic.com" target="_blank" style="color:var(--orange)">console.anthropic.com</a> で取得できます。
+          <a href="https://aistudio.google.com" target="_blank" style="color:var(--orange)">aistudio.google.com</a> で取得できます（無料）。
         </div>
         <input class="api-inp" type="password" id="api-key-inp" placeholder="sk-ant-...">
         <div style="display:flex;align-items:center">
@@ -580,14 +580,14 @@ ${pending.map(t => `- ID:${t.id} | ${t.name} | カテゴリ:${CATS[t.cat]?.l} | 
   out.innerHTML = `<div style="color:var(--text3);font-size:12px;text-align:center;padding:2rem">生成中...</div>`;
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-calls': 'true' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 2000, messages: [{ role: 'user', content: prompt }] })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2000, temperature: 0.3 } })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || 'APIエラー');
-    const raw = data.content.map(b => b.text || '').join('');
+    const raw = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
     const clean = raw.replace(/```json|```/g, '').trim();
     let parsed;
     try { parsed = JSON.parse(clean); }
