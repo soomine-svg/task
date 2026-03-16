@@ -139,10 +139,20 @@ textarea.field-inp { resize: none; height: 72px; font-size: 13px; }
 .day-bar { height: 2px; background: var(--border); border-radius: 1px; margin-bottom: 8px; position: relative; overflow: hidden; }
 .day-bar-fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 1px; background: var(--accent); transition: width .4s ease; }
 
-.sched-item { background: var(--bg2); border: 0.5px solid var(--border); border-left: 3px solid var(--text3); border-radius: var(--r); padding: 9px 12px; margin-bottom: 6px; }
+.sched-item { background: var(--bg2); border: 0.5px solid var(--border); border-left: 3px solid var(--text3); border-radius: var(--r); padding: 9px 12px; margin-bottom: 6px; display: flex; align-items: flex-start; gap: 10px; transition: opacity .2s; }
+.sched-item.done { opacity: 0.35; }
+.sched-item.done .sched-name { text-decoration: line-through; }
+.sched-body { flex: 1; min-width: 0; }
+.sched-chk { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--border2); background: transparent; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; transition: all .2s; margin-top: 1px; }
+.sched-chk.done { background: var(--green); border-color: var(--green); color: #0d0d0f; }
 .sched-name { font-size: 13px; font-weight: 500; color: var(--text); }
 .sched-meta { font-size: 11px; color: var(--text3); margin-top: 4px; font-family: 'DM Mono', monospace; }
 .sched-note { font-size: 11px; color: var(--text2); margin-top: 3px; }
+
+/* Undo toast */
+.undo-toast { position: fixed; bottom: calc(80px + var(--safe-bot)); left: 50%; transform: translateX(-50%) translateY(20px); background: var(--bg3); border: 0.5px solid var(--border2); border-radius: 24px; padding: 10px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--text2); z-index: 300; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; white-space: nowrap; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+.undo-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+.undo-btn { background: none; border: none; color: var(--accent); font-size: 13px; font-weight: 700; cursor: pointer; padding: 0; font-family: 'Noto Sans JP', sans-serif; }
 .summary-card { background: var(--accent-dim); border: 0.5px solid rgba(200,240,96,0.25); border-radius: var(--r); padding: 10px 13px; margin-bottom: 16px; font-size: 12px; color: var(--accent); line-height: 1.6; }
 .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text3); font-size: 13px; line-height: 2; }
 .empty-icon { font-size: 32px; display: block; margin-bottom: 8px; }
@@ -240,6 +250,12 @@ textarea.field-inp { resize: none; height: 72px; font-size: 13px; }
 <!-- FAB -->
 <button class="fab" id="fab" onclick="openSheet()" aria-label="タスクを追加">＋</button>
 
+<!-- Undo toast -->
+<div class="undo-toast" id="undo-toast">
+  <span id="undo-msg">完了にしました</span>
+  <button class="undo-btn" onclick="undoDone()">元に戻す</button>
+</div>
+
 <!-- Add task sheet -->
 <div class="sheet-overlay" id="overlay" onclick="overlayClick(event)">
   <div class="sheet">
@@ -334,6 +350,8 @@ let tasks = (_savedParsed && Array.isArray(_savedParsed) && _savedParsed.length 
 let activeFilter = 'all';
 let editDlId = null;
 let changed = false;
+let lastSnapshot = null;   // undo用スナップショット
+let undoTimer = null;      // トースト自動消去タイマー
 
 // ── Persistence ────────────────────────────────────────────
 function save() { try { localStorage.setItem('hpc-v3', JSON.stringify(tasks)); } catch{} }
@@ -477,7 +495,14 @@ function taskCard(t) {
 }
 
 // ── Task actions ───────────────────────────────────────────
-function toggleDone(id) { tasks = tasks.map(t => t.id === id ? { ...t, done: !t.done } : t); renderAll(); markChanged(); }
+function toggleDone(id) {
+  lastSnapshot = JSON.parse(JSON.stringify(tasks));
+  const target = tasks.find(t => t.id === id);
+  const newDone = !target.done;
+  tasks = tasks.map(t => t.id === id ? { ...t, done: newDone } : t);
+  renderAll(); markChanged();
+  showUndoToast(newDone ? `「${target.name.slice(0,16)}…」を完了にしました` : `完了を取り消しました`);
+}
 function deleteTask(id) { if (!confirm('削除しますか？')) return; tasks = tasks.filter(t => t.id !== id); renderAll(); markChanged(); }
 function editDl(id) { editDlId = id; renderTasks(); }
 function saveDl(id) {
@@ -487,6 +512,42 @@ function saveDl(id) {
 }
 function setFilter(f) { activeFilter = f; renderChips(); renderTasks(); }
 function markChanged() { changed = true; document.getElementById('changed-notice').style.display = 'block'; }
+
+// ── Undo helpers ───────────────────────────────────────────
+function showUndoToast(msg) {
+  const toast = document.getElementById('undo-toast');
+  document.getElementById('undo-msg').textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => { toast.classList.remove('show'); lastSnapshot = null; }, 4000);
+}
+function undoDone() {
+  if (!lastSnapshot) return;
+  tasks = lastSnapshot;
+  lastSnapshot = null;
+  clearTimeout(undoTimer);
+  document.getElementById('undo-toast').classList.remove('show');
+  renderAll();
+  // スケジュール画面も再描画
+  const schedOut = document.getElementById('sched-out');
+  if (schedOut && window._lastScheduleData) renderSchedule(window._lastScheduleData);
+}
+
+// スケジュール画面から完了ボタンを押したとき
+function schedDone(taskId) {
+  lastSnapshot = JSON.parse(JSON.stringify(tasks));
+  const target = tasks.find(t => t.id === taskId);
+  if (!target) return;
+  const newDone = !target.done;
+  tasks = tasks.map(t => t.id === taskId ? { ...t, done: newDone } : t);
+  renderAll(); markChanged();
+  // スケジュール画面の該当アイテムだけ見た目を更新
+  const card = document.getElementById(`sched-card-${taskId}`);
+  const chk = document.getElementById(`sched-chk-${taskId}`);
+  if (card) card.classList.toggle('done', newDone);
+  if (chk)  { chk.classList.toggle('done', newDone); chk.textContent = newDone ? '✓' : ''; }
+  showUndoToast(newDone ? `「${target.name.slice(0,16)}…」を完了にしました` : `完了を取り消しました`);
+}
 
 // ── Add task sheet ─────────────────────────────────────────
 function openSheet() {
@@ -585,7 +646,7 @@ async function runSchedule() {
     if (surveyIdx !== -1) {
       const st = taskQueue[surveyIdx];
       const h = Math.min(st.hrs, isWeekend ? 3 : 6);
-      dayTasks.push({ name: st.name, cat: st.cat, hrs: h, note: '調査業務（通常稼働）' });
+      dayTasks.push({ id: st.id, name: st.name, cat: st.cat, hrs: h, note: '調査業務（通常稼働）' });
       used += h;
       taskQueue.splice(surveyIdx, 1);
     }
@@ -599,7 +660,7 @@ async function runSchedule() {
         const note = t.dl
           ? (daysLeft(t.dl) <= 3 ? '⚠ 期限が迫っています！' : daysLeft(t.dl) <= 7 ? '今週中に完了を' : '')
           : '';
-        dayTasks.push({ name: t.name, cat: t.cat, hrs: t.hrs, note });
+        dayTasks.push({ id: t.id, name: t.name, cat: t.cat, hrs: t.hrs, note });
         used += t.hrs;
         taskQueue.splice(i, 1);
       } else { i++; }
@@ -625,6 +686,7 @@ async function runSchedule() {
 }
 
 function renderSchedule(data) {
+  window._lastScheduleData = data;
   const out = document.getElementById('sched-out');
   let html = '';
   if (data.summary) html += `<div class="summary-card">✦ ${data.summary}</div>`;
@@ -635,10 +697,15 @@ function renderSchedule(data) {
     const barColor = pct >= 90 ? 'var(--red)' : pct >= 70 ? 'var(--orange)' : 'var(--accent)';
     const items = day.tasks.map(t => {
       const c = CATS[t.cat] || CATS.other;
-      return `<div class="sched-item" style="border-left-color:${c.border}">
-        <div class="sched-name">${t.name}</div>
-        <div class="sched-meta">${c.l} · ${t.hrs}h</div>
-        ${t.note ? `<div class="sched-note">${t.note}</div>` : ''}
+      const task = tasks.find(tk => tk.id === t.id);
+      const isDone = task ? task.done : false;
+      return `<div class="sched-item${isDone ? ' done' : ''}" id="sched-card-${t.id}" style="border-left-color:${c.border}">
+        <button class="sched-chk${isDone ? ' done' : ''}" id="sched-chk-${t.id}" onclick="schedDone(${t.id})">${isDone ? '✓' : ''}</button>
+        <div class="sched-body">
+          <div class="sched-name">${t.name}</div>
+          <div class="sched-meta">${c.l} · ${t.hrs}h</div>
+          ${t.note ? `<div class="sched-note">${t.note}</div>` : ''}
+        </div>
       </div>`;
     }).join('');
     html += `<div class="day-block">
