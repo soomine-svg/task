@@ -238,6 +238,19 @@ textarea.field-inp { resize: none; height: 72px; font-size: 13px; }
         </div>
       </div>
 
+      <div style="background:var(--bg2);border:0.5px solid var(--green);border-radius:var(--r-lg);padding:16px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:6px">💾 データのバックアップ・復元</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:12px">アプリ更新前に必ずエクスポートしてください。<br>更新後にインポートすればタスクが復元されます。</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="exportData()" style="background:var(--green-dim);color:var(--green);border:0.5px solid var(--green);border-radius:var(--r);padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Noto Sans JP',sans-serif">⬇ エクスポート</button>
+          <label style="background:var(--blue-dim);color:var(--blue);border:0.5px solid var(--blue);border-radius:var(--r);padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Noto Sans JP',sans-serif">
+            ⬆ インポート
+            <input type="file" accept=".json" id="import-file" style="display:none" onchange="importData(event)">
+          </label>
+        </div>
+        <div id="import-msg" style="font-size:11px;color:var(--green);margin-top:8px;display:none"></div>
+      </div>
+
       <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r-lg);padding:16px">
         <div style="font-size:13px;font-weight:700;margin-bottom:4px">データ管理</div>
         <div style="font-size:12px;color:var(--text3);margin-bottom:12px">全タスクとスケジュールをリセットします</div>
@@ -466,6 +479,45 @@ function resetAll() {
   localStorage.removeItem('hpc-v3');
   localStorage.removeItem('hpc-deleted');
   location.reload();
+}
+
+function exportData() {
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    tasks,
+    deleted: JSON.parse(localStorage.getItem('hpc-deleted') || '[]'),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const date = new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'2-digit', day:'2-digit' }).replace(/\//g, '');
+  a.href = url;
+  a.download = `hpcanvas_tasks_${date}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!data.tasks || !Array.isArray(data.tasks)) throw new Error('形式が違います');
+      localStorage.setItem('hpc-v3', JSON.stringify(data.tasks));
+      if (data.deleted) localStorage.setItem('hpc-deleted', JSON.stringify(data.deleted));
+      const msg = document.getElementById('import-msg');
+      msg.textContent = `✓ ${data.tasks.length}件のタスクを復元しました。再読み込みします...`;
+      msg.style.display = 'block';
+      setTimeout(() => location.reload(), 1200);
+    } catch(err) {
+      alert('インポートに失敗しました。正しいバックアップファイルを選んでください。');
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
 }
 
 // ── Date helpers ───────────────────────────────────────────
