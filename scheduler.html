@@ -304,6 +304,61 @@ textarea.field-inp { resize: none; height: 72px; font-size: 13px; }
   </div>
 </div>
 
+<!-- Edit task sheet -->
+<div class="sheet-overlay" id="edit-overlay" onclick="editOverlayClick(event)">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">タスクを編集</div>
+    <div class="field-label">タスク名 *</div>
+    <input class="field-inp" id="e-name" placeholder="タスク名" autocomplete="off">
+    <div class="field-label">カテゴリ</div>
+    <select class="field-sel" id="e-cat" style="width:100%;margin-bottom:12px">
+      <option value="legal">法人化・法務</option>
+      <option value="tax">税務・会計</option>
+      <option value="survey">調査業務</option>
+      <option value="photo">写真・映像</option>
+      <option value="album">アルバム制作</option>
+      <option value="tour">体験ツアー</option>
+      <option value="other">その他</option>
+    </select>
+    <div class="field-row">
+      <div style="flex:1">
+        <div class="field-label">期限</div>
+        <input class="field-inp" type="date" id="e-dl" style="margin:0">
+      </div>
+      <div style="flex:1">
+        <div class="field-label">所要時間</div>
+        <select class="field-sel" id="e-hrs">
+          <option value="0.5">30分</option>
+          <option value="1">1時間</option>
+          <option value="2">2時間</option>
+          <option value="3">3時間</option>
+          <option value="4">半日 4h</option>
+          <option value="6">6時間</option>
+          <option value="8">終日 8h</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-label">優先度</div>
+    <select class="field-sel" id="e-pri" style="width:100%;margin-bottom:12px">
+      <option value="high">🔴 高</option>
+      <option value="mid">🟡 中</option>
+      <option value="low">🟢 低</option>
+    </select>
+    <div class="field-label">フェーズ</div>
+    <select class="field-sel" id="e-ph" style="width:100%;margin-bottom:12px">
+      <option value="p1">PHASE 1 ── 今週中（超緊急）</option>
+      <option value="p2">PHASE 2 ── 設立前（〜3/31）</option>
+      <option value="p3">PHASE 3 ── 設立直後（4月中）</option>
+      <option value="p4">PHASE 4 ── 設立後〜1年以内</option>
+    </select>
+    <div class="field-label">メモ（任意）</div>
+    <textarea class="field-inp" id="e-note" placeholder="補足・確認事項など"></textarea>
+    <button class="submit-btn" onclick="saveEdit()">保存する</button>
+    <div class="cancel-link" onclick="closeEditSheet()">キャンセル</div>
+  </div>
+</div>
+
 <script>
 // ── Constants ──────────────────────────────────────────────
 const CATS = {
@@ -322,10 +377,8 @@ const PHASES = [
   { id:'p4', l:'PHASE 4 ── 設立後〜1年以内' },
 ];
 
-// ── State ──────────────────────────────────────────────────
-const _savedRaw = localStorage.getItem('hpc-v3');
-const _savedParsed = _savedRaw ? JSON.parse(_savedRaw) : null;
-let tasks = (_savedParsed && Array.isArray(_savedParsed) && _savedParsed.length > 0) ? _savedParsed : [
+// ── Default tasks (ID 1〜20 は常にデフォルト枠) ────────────
+const DEFAULT_TASKS = [
   {id:1, name:'商工会に電話→4/1設立で計画書認定の期限を確認', cat:'legal', dl:'2026-03-17', hrs:0.5, pri:'high', ph:'p1', done:false, note:'「4月1日設立予定。特定創業支援の認定はいつまでに計画書を提出すれば間に合いますか」と聞く'},
   {id:2, name:'定款の作成開始（マネーフォワード会社設立）', cat:'legal', dl:'2026-03-21', hrs:3, pri:'high', ph:'p1', done:false, note:'商号：H.P.canvas　目的欄に写真・映像・体験ツアー・調査業務を幅広く記載'},
   {id:3, name:'白タク規制の方針を確認（商工会または行政書士）', cat:'legal', dl:'2026-03-21', hrs:1, pri:'high', ph:'p1', done:false, note:'体験料に含める形にするか、タクシー会社と提携するか、法人設立前に決めておく'},
@@ -347,6 +400,35 @@ let tasks = (_savedParsed && Array.isArray(_savedParsed) && _savedParsed.length 
   {id:19, name:'Airbnb体験・VELTRA・じゃらんへの掲載開始', cat:'tour', dl:'2026-07-01', hrs:8, pri:'mid', ph:'p4', done:false, note:'弓作り体験を最優先。都城弓製造業協同組合（楠見氏）にアポを入れる'},
   {id:20, name:'企業向けSNS運用代行の試験展開（1〜2社）', cat:'survey', dl:'2026-08-01', hrs:4, pri:'mid', ph:'p4', done:false, note:'調査業務の移動中に名刺を渡すだけで営業になる。目標：10社×3〜5万円/月'},
 ];
+
+// ── State: 保存済みタスクとデフォルトをマージ ──────────────
+// ルール：
+//   ① 保存済みタスクは完了状態・編集内容ごと完全保持
+//   ② 削除したタスクは更新後も復活しない（削除済みIDを記録）
+//   ③ デフォルト(ID 1-20)で未収録・未削除のものだけ追加
+//   ④ 手動追加タスク(ID=タイムスタンプ13桁)は常に保持
+(function() {
+  let saved = [];
+  let deletedIds = new Set();
+  try {
+    const raw = localStorage.getItem('hpc-v3');
+    if (raw) saved = JSON.parse(raw);
+    if (!Array.isArray(saved)) saved = [];
+    const delRaw = localStorage.getItem('hpc-deleted');
+    if (delRaw) deletedIds = new Set(JSON.parse(delRaw));
+  } catch(e) { saved = []; }
+
+  if (saved.length === 0 && deletedIds.size === 0) {
+    // 初回起動：デフォルト20件をそのまま使用
+    window._tasks = DEFAULT_TASKS.slice();
+  } else {
+    // 既存データあり：保存済みを基本に、未収録かつ未削除のデフォルトだけ追加
+    const savedIds = new Set(saved.map(t => t.id));
+    const missingDefaults = DEFAULT_TASKS.filter(t => !savedIds.has(t.id) && !deletedIds.has(t.id));
+    window._tasks = [...saved, ...missingDefaults];
+  }
+})();
+let tasks = window._tasks;
 let activeFilter = 'all';
 let editDlId = null;
 let changed = false;
@@ -354,7 +436,9 @@ let lastSnapshot = null;   // undo用スナップショット
 let undoTimer = null;      // トースト自動消去タイマー
 
 // ── Persistence ────────────────────────────────────────────
-function save() { try { localStorage.setItem('hpc-v3', JSON.stringify(tasks)); } catch{} }
+function save() {
+  try { localStorage.setItem('hpc-v3', JSON.stringify(tasks)); } catch{}
+}
 function saveSettings() {
   localStorage.setItem('hpc-settings', JSON.stringify({
     hoursNormal: document.getElementById('hours-normal').value,
@@ -380,6 +464,7 @@ function saveApiKey() {
 function resetAll() {
   if (!confirm('全タスクをリセットしますか？')) return;
   localStorage.removeItem('hpc-v3');
+  localStorage.removeItem('hpc-deleted');
   location.reload();
 }
 
@@ -490,6 +575,7 @@ function taskCard(t) {
           : `<button class="edit-dl-btn" onclick="editDl(${t.id})">${t.dl ? '日付変更' : '期限を設定'}</button>`}
       </div>
     </div>
+    <button class="del-btn" onclick="openEditSheet(${t.id})" title="編集" style="color:var(--text3);font-size:15px;margin-right:2px">✎</button>
     <button class="del-btn" onclick="deleteTask(${t.id})">×</button>
   </div>`;
 }
@@ -503,7 +589,20 @@ function toggleDone(id) {
   renderAll(); markChanged();
   showUndoToast(newDone ? `「${target.name.slice(0,16)}…」を完了にしました` : `完了を取り消しました`);
 }
-function deleteTask(id) { if (!confirm('削除しますか？')) return; tasks = tasks.filter(t => t.id !== id); renderAll(); markChanged(); }
+function deleteTask(id) {
+  if (!confirm('削除しますか？')) return;
+  // デフォルトタスク(ID 1-20)なら削除済みリストに記録
+  if (id <= 20) {
+    try {
+      const raw = localStorage.getItem('hpc-deleted');
+      const del = raw ? JSON.parse(raw) : [];
+      if (!del.includes(id)) del.push(id);
+      localStorage.setItem('hpc-deleted', JSON.stringify(del));
+    } catch{}
+  }
+  tasks = tasks.filter(t => t.id !== id);
+  renderAll(); markChanged();
+}
 function editDl(id) { editDlId = id; renderTasks(); }
 function saveDl(id) {
   const inp = document.getElementById(`dl-inp-${id}`);
@@ -566,6 +665,46 @@ function closeSheet() {
   document.getElementById('f-note').value = '';
 }
 function overlayClick(e) { if (e.target === document.getElementById('overlay')) closeSheet(); }
+
+// ── Edit task sheet ────────────────────────────────────────
+let editingId = null;
+function openEditSheet(id) {
+  const t = tasks.find(t => t.id === id);
+  if (!t) return;
+  editingId = id;
+  document.getElementById('e-name').value = t.name;
+  document.getElementById('e-cat').value = t.cat;
+  document.getElementById('e-dl').value = t.dl || '';
+  document.getElementById('e-hrs').value = String(t.hrs);
+  document.getElementById('e-pri').value = t.pri;
+  document.getElementById('e-ph').value = t.ph || 'p4';
+  document.getElementById('e-note').value = t.note || '';
+  const overlay = document.getElementById('edit-overlay');
+  overlay.style.display = 'flex';
+  requestAnimationFrame(() => overlay.classList.add('open'));
+  setTimeout(() => document.getElementById('e-name').focus(), 300);
+}
+function closeEditSheet() {
+  const overlay = document.getElementById('edit-overlay');
+  overlay.classList.remove('open');
+  setTimeout(() => { overlay.style.display = 'none'; editingId = null; }, 250);
+}
+function editOverlayClick(e) { if (e.target === document.getElementById('edit-overlay')) closeEditSheet(); }
+function saveEdit() {
+  const name = document.getElementById('e-name').value.trim();
+  if (!name) { document.getElementById('e-name').focus(); return; }
+  tasks = tasks.map(t => t.id === editingId ? {
+    ...t,
+    name,
+    cat:  document.getElementById('e-cat').value,
+    dl:   document.getElementById('e-dl').value,
+    hrs:  parseFloat(document.getElementById('e-hrs').value),
+    pri:  document.getElementById('e-pri').value,
+    ph:   document.getElementById('e-ph').value,
+    note: document.getElementById('e-note').value.trim(),
+  } : t);
+  renderAll(); closeEditSheet(); markChanged();
+}
 function addTask() {
   const name = document.getElementById('f-name').value.trim();
   if (!name) { document.getElementById('f-name').focus(); return; }
