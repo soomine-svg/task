@@ -823,6 +823,9 @@ async function runSchedule() {
   // Build day slots starting from today
   const DAYS_JP = ['日','月','火','水','木','金','土'];
   const schedule = [];
+  // 「中間報告」「☎️」を含むタスクは1日目に必ず先頭配置
+  const isPriority = t => /中間報告|☎/.test(t.name);
+
   let dayOffset = 0;
   let taskQueue = [...scored];
 
@@ -839,6 +842,16 @@ async function runSchedule() {
 
     const dayTasks = [];
     let used = 0;
+
+    // ── Step 0: 中間報告・☎️タスクを1日目の先頭に強制配置 ──
+    if (dayOffset === 0) {
+      const priorityTasks = taskQueue.filter(t => isPriority(t));
+      for (const t of priorityTasks) {
+        dayTasks.push({ id: t.id, name: t.name, cat: t.cat, hrs: t.hrs, note: '📌 本日最優先で対応' });
+        used += t.hrs;
+        taskQueue.splice(taskQueue.indexOf(t), 1);
+      }
+    }
 
     // ── Step 1: 期限超過タスクを最優先で詰める ──────────────
     // 調査業務の最低保証時間（超過タスクがあっても最低2hは確保）
