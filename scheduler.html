@@ -310,6 +310,13 @@ textarea.field-inp { resize: none; height: 72px; font-size: 13px; }
       <option value="mid" selected>🟡 中</option>
       <option value="low">🟢 低</option>
     </select>
+    <div class="field-label">タグ</div>
+    <select class="field-sel" id="f-tag" style="width:100%;margin-bottom:12px">
+      <option value="urgent">🔴 緊急</option>
+      <option value="month">🟠 今月中</option>
+      <option value="year" selected>🟢 今年中</option>
+      <option value="someday">⬜ いつか</option>
+    </select>
     <div class="field-label">メモ（任意）</div>
     <textarea class="field-inp" id="f-note" placeholder="補足・確認事項など"></textarea>
     <button class="submit-btn" onclick="addTask()">追加する</button>
@@ -358,12 +365,12 @@ textarea.field-inp { resize: none; height: 72px; font-size: 13px; }
       <option value="mid">🟡 中</option>
       <option value="low">🟢 低</option>
     </select>
-    <div class="field-label">フェーズ</div>
-    <select class="field-sel" id="e-ph" style="width:100%;margin-bottom:12px">
-      <option value="p1">PHASE 1 ── 今週中（超緊急）</option>
-      <option value="p2">PHASE 2 ── 設立前（〜3/31）</option>
-      <option value="p3">PHASE 3 ── 設立直後（4月中）</option>
-      <option value="p4">PHASE 4 ── 設立後〜1年以内</option>
+    <div class="field-label">タグ</div>
+    <select class="field-sel" id="e-tag" style="width:100%;margin-bottom:12px">
+      <option value="urgent">🔴 緊急</option>
+      <option value="month">🟠 今月中</option>
+      <option value="year">🟢 今年中</option>
+      <option value="someday">⬜ いつか</option>
     </select>
     <div class="field-label">メモ（任意）</div>
     <textarea class="field-inp" id="e-note" placeholder="補足・確認事項など"></textarea>
@@ -383,35 +390,35 @@ const CATS = {
   tour:   { l:'体験ツアー',    bg:'rgba(200,240,96,0.15)',  cl:'#c8f060',  border:'#c8f060' },
   other:  { l:'その他',        bg:'rgba(136,136,134,0.15)', cl:'#888886',  border:'#888886' },
 };
-const PHASES = [
-  { id:'p1', l:'PHASE 1 ── 今週中（超緊急）' },
-  { id:'p2', l:'PHASE 2 ── 設立前（〜3/31）' },
-  { id:'p3', l:'PHASE 3 ── 設立直後（4月中）' },
-  { id:'p4', l:'PHASE 4 ── 設立後〜1年以内' },
+const TAGS = [
+  { id:'urgent',   l:'🔴 緊急',   color:'var(--red)' },
+  { id:'month',    l:'🟠 今月中', color:'var(--orange)' },
+  { id:'year',     l:'🟢 今年中', color:'var(--green)' },
+  { id:'someday',  l:'⬜ いつか', color:'var(--text3)' },
 ];
 
 // ── Default tasks (ID 1〜20 は常にデフォルト枠) ────────────
 const DEFAULT_TASKS = [
-  {id:1, name:'商工会に電話→4/1設立で計画書認定の期限を確認', cat:'legal', dl:'2026-03-17', hrs:0.5, pri:'high', ph:'p1', done:false, note:'「4月1日設立予定。特定創業支援の認定はいつまでに計画書を提出すれば間に合いますか」と聞く'},
-  {id:2, name:'定款の作成開始（マネーフォワード会社設立）', cat:'legal', dl:'2026-03-21', hrs:3, pri:'high', ph:'p1', done:false, note:'商号：H.P.canvas　目的欄に写真・映像・体験ツアー・調査業務を幅広く記載'},
-  {id:3, name:'白タク規制の方針を確認（商工会または行政書士）', cat:'legal', dl:'2026-03-21', hrs:1, pri:'high', ph:'p1', done:false, note:'体験料に含める形にするか、タクシー会社と提携するか、法人設立前に決めておく'},
-  {id:4, name:'調査業務（通常稼働）', cat:'survey', dl:'2026-03-31', hrs:6, pri:'high', ph:'p1', done:false, note:'生活を守る幹。これを維持しながら他のタスクを進める'},
-  {id:5, name:'税理士の選定・面談予約', cat:'tax', dl:'2026-03-25', hrs:2, pri:'mid', ph:'p2', done:false, note:'設立と同時に契約が理想。役員報酬額・節税方針もこの段階で相談'},
-  {id:6, name:'商工会へ事業計画書を提出・認定申請', cat:'legal', dl:'2026-03-25', hrs:4, pri:'high', ph:'p2', done:false, note:'登録免許税75,000円減額に必要。認定後に市役所→法務局の順番を守る'},
-  {id:7, name:'市役所へ修了証＋認定済み計画書を提出', cat:'legal', dl:'2026-03-28', hrs:1, pri:'high', ph:'p2', done:false, note:'商工会の認定を受けてから提出。順番を必ず守ること'},
-  {id:8, name:'Airbnb体験ページの法人名義登録可否を確認', cat:'tour', dl:'2026-03-28', hrs:1, pri:'mid', ph:'p2', done:false, note:'個人→法人の切り替えは煩雑。最初から法人名義で登録できるか確認'},
-  {id:9, name:'法務局で登記申請', cat:'legal', dl:'2026-04-01', hrs:3, pri:'high', ph:'p3', done:false, note:'特定創業支援の書類一式を持参。設立日＝登記申請日'},
-  {id:10, name:'税務署への法人設立届出・青色申告承認申請', cat:'tax', dl:'2026-04-15', hrs:2, pri:'high', ph:'p3', done:false, note:'設立から2ヶ月以内が期限。税理士と一緒に対応'},
-  {id:11, name:'社会保険加入手続き（年金事務所）', cat:'tax', dl:'2026-04-15', hrs:2, pri:'high', ph:'p3', done:false, note:'役員報酬20万円 → 手取り約17.9万円（社保本人負担約2.1万円）'},
-  {id:12, name:'夫の扶養から外れる手続き', cat:'other', dl:'2026-04-15', hrs:1, pri:'high', ph:'p3', done:false, note:'役員報酬受け取り開始後すみやかに。夫の会社への届出が必要'},
-  {id:13, name:'インボイス登録（法人番号取得後）', cat:'tax', dl:'2026-04-20', hrs:1, pri:'high', ph:'p3', done:false, note:'既存の調査業務委託先との取引継続に必要'},
-  {id:14, name:'法人口座開設の申込み', cat:'legal', dl:'2026-04-20', hrs:1, pri:'high', ph:'p3', done:false, note:'登記完了後すぐに動く。審査に1〜2週間かかる場合あり'},
-  {id:15, name:'調査業務の法人契約切り替え', cat:'survey', dl:'2026-05-01', hrs:1, pri:'high', ph:'p4', done:false, note:'「法人化したので契約先をH.P.canvasに変更したい」と東京本社へ連絡'},
-  {id:16, name:'外注体制の構築・NDA含む業務委託契約書を締結', cat:'album', dl:'2026-06-01', hrs:4, pri:'mid', ph:'p4', done:false, note:'写真セレクト・編集を担当の友人・娘さんと。長崎保育園9月納品に間に合わせる'},
-  {id:17, name:'長崎保育園：NDA締結と撮影データ受け取り日程確認', cat:'album', dl:'2026-07-01', hrs:1, pri:'mid', ph:'p4', done:false, note:'2026年9月納品確定済み。撮影データの受け渡しスケジュールを早めに確認'},
-  {id:18, name:'小規模企業共済への加入', cat:'tax', dl:'2026-06-01', hrs:1, pri:'mid', ph:'p4', done:false, note:'月最大7万円が全額所得控除。設立後早めに加入するほど有利'},
-  {id:19, name:'Airbnb体験・VELTRA・じゃらんへの掲載開始', cat:'tour', dl:'2026-07-01', hrs:8, pri:'mid', ph:'p4', done:false, note:'弓作り体験を最優先。都城弓製造業協同組合（楠見氏）にアポを入れる'},
-  {id:20, name:'企業向けSNS運用代行の試験展開（1〜2社）', cat:'survey', dl:'2026-08-01', hrs:4, pri:'mid', ph:'p4', done:false, note:'調査業務の移動中に名刺を渡すだけで営業になる。目標：10社×3〜5万円/月'},
+  {id:1, name:'商工会に電話→4/1設立で計画書認定の期限を確認', cat:'legal', dl:'2026-03-17', hrs:0.5, pri:'high', tag:'urgent', done:false, note:'「4月1日設立予定。特定創業支援の認定はいつまでに計画書を提出すれば間に合いますか」と聞く'},
+  {id:2, name:'定款の作成開始（マネーフォワード会社設立）', cat:'legal', dl:'2026-03-21', hrs:3, pri:'high', tag:'urgent', done:false, note:'商号：H.P.canvas　目的欄に写真・映像・体験ツアー・調査業務を幅広く記載'},
+  {id:3, name:'白タク規制の方針を確認（商工会または行政書士）', cat:'legal', dl:'2026-03-21', hrs:1, pri:'high', tag:'urgent', done:false, note:'体験料に含める形にするか、タクシー会社と提携するか、法人設立前に決めておく'},
+  {id:4, name:'調査業務（通常稼働）', cat:'survey', dl:'2026-03-31', hrs:6, pri:'high', tag:'urgent', done:false, note:'生活を守る幹。これを維持しながら他のタスクを進める'},
+  {id:5, name:'税理士の選定・面談予約', cat:'tax', dl:'2026-03-25', hrs:2, pri:'mid', tag:'month', done:false, note:'設立と同時に契約が理想。役員報酬額・節税方針もこの段階で相談'},
+  {id:6, name:'商工会へ事業計画書を提出・認定申請', cat:'legal', dl:'2026-03-25', hrs:4, pri:'high', tag:'month', done:false, note:'登録免許税75,000円減額に必要。認定後に市役所→法務局の順番を守る'},
+  {id:7, name:'市役所へ修了証＋認定済み計画書を提出', cat:'legal', dl:'2026-03-28', hrs:1, pri:'high', tag:'month', done:false, note:'商工会の認定を受けてから提出。順番を必ず守ること'},
+  {id:8, name:'Airbnb体験ページの法人名義登録可否を確認', cat:'tour', dl:'2026-03-28', hrs:1, pri:'mid', tag:'month', done:false, note:'個人→法人の切り替えは煩雑。最初から法人名義で登録できるか確認'},
+  {id:9, name:'法務局で登記申請', cat:'legal', dl:'2026-04-01', hrs:3, pri:'high', tag:'month', done:false, note:'特定創業支援の書類一式を持参。設立日＝登記申請日'},
+  {id:10, name:'税務署への法人設立届出・青色申告承認申請', cat:'tax', dl:'2026-04-15', hrs:2, pri:'high', tag:'month', done:false, note:'設立から2ヶ月以内が期限。税理士と一緒に対応'},
+  {id:11, name:'社会保険加入手続き（年金事務所）', cat:'tax', dl:'2026-04-15', hrs:2, pri:'high', tag:'month', done:false, note:'役員報酬20万円 → 手取り約17.9万円（社保本人負担約2.1万円）'},
+  {id:12, name:'夫の扶養から外れる手続き', cat:'other', dl:'2026-04-15', hrs:1, pri:'high', tag:'month', done:false, note:'役員報酬受け取り開始後すみやかに。夫の会社への届出が必要'},
+  {id:13, name:'インボイス登録（法人番号取得後）', cat:'tax', dl:'2026-04-20', hrs:1, pri:'high', tag:'month', done:false, note:'既存の調査業務委託先との取引継続に必要'},
+  {id:14, name:'法人口座開設の申込み', cat:'legal', dl:'2026-04-20', hrs:1, pri:'high', tag:'month', done:false, note:'登記完了後すぐに動く。審査に1〜2週間かかる場合あり'},
+  {id:15, name:'調査業務の法人契約切り替え', cat:'survey', dl:'2026-05-01', hrs:1, pri:'high', tag:'year', done:false, note:'「法人化したので契約先をH.P.canvasに変更したい」と東京本社へ連絡'},
+  {id:16, name:'外注体制の構築・NDA含む業務委託契約書を締結', cat:'album', dl:'2026-06-01', hrs:4, pri:'mid', tag:'year', done:false, note:'写真セレクト・編集を担当の友人・娘さんと。長崎保育園9月納品に間に合わせる'},
+  {id:17, name:'長崎保育園：NDA締結と撮影データ受け取り日程確認', cat:'album', dl:'2026-07-01', hrs:1, pri:'mid', tag:'year', done:false, note:'2026年9月納品確定済み。撮影データの受け渡しスケジュールを早めに確認'},
+  {id:18, name:'小規模企業共済への加入', cat:'tax', dl:'2026-06-01', hrs:1, pri:'mid', tag:'year', done:false, note:'月最大7万円が全額所得控除。設立後早めに加入するほど有利'},
+  {id:19, name:'Airbnb体験・VELTRA・じゃらんへの掲載開始', cat:'tour', dl:'2026-07-01', hrs:8, pri:'mid', tag:'year', done:false, note:'弓作り体験を最優先。都城弓製造業協同組合（楠見氏）にアポを入れる'},
+  {id:20, name:'企業向けSNS運用代行の試験展開（1〜2社）', cat:'survey', dl:'2026-08-01', hrs:4, pri:'mid', tag:'year', done:false, note:'調査業務の移動中に名刺を渡すだけで営業になる。目標：10社×3〜5万円/月'},
 ];
 
 // ── State: 保存済みタスクとデフォルトをマージ ──────────────
@@ -582,18 +589,22 @@ function renderTasks() {
 
   let html = '';
   if (activeFilter === 'all' || activeFilter === 'todo') {
-    PHASES.forEach(ph => {
-      const items = shown.filter(t => t.ph === ph.id && !t.done).sort((a, b) => {
+    TAGS.forEach(tag => {
+      const items = shown.filter(t => {
+        // 後方互換：旧phフィールドをtagに読み替え
+        const t_tag = t.tag || ({'p1':'urgent','p2':'month','p3':'month','p4':'year'}[t.ph] || 'year');
+        return t_tag === tag.id && !t.done;
+      }).sort((a, b) => {
         const da = a.dl ? daysLeft(a.dl) : 999, db = b.dl ? daysLeft(b.dl) : 999;
         return da - db;
       });
       if (!items.length) return;
-      html += `<div class="phase-label">${ph.l}</div>`;
+      html += `<div class="phase-label" style="color:${tag.color}">${tag.l}</div>`;
       items.forEach(t => html += taskCard(t));
     });
     const doneItems = shown.filter(t => t.done);
     if (doneItems.length) {
-      html += `<div class="phase-label">DONE ── 完了済み</div>`;
+      html += `<div class="phase-label">✓ 完了済み</div>`;
       doneItems.forEach(t => html += taskCard(t));
     }
   } else {
@@ -729,7 +740,7 @@ function openEditSheet(id) {
   document.getElementById('e-dl').value = t.dl || '';
   document.getElementById('e-hrs').value = String(t.hrs);
   document.getElementById('e-pri').value = t.pri;
-  document.getElementById('e-ph').value = t.ph || 'p4';
+  document.getElementById('e-tag').value = t.tag || ({'p1':'urgent','p2':'month','p3':'month','p4':'year'}[t.ph] || 'year');
   document.getElementById('e-note').value = t.note || '';
   const overlay = document.getElementById('edit-overlay');
   overlay.style.display = 'flex';
@@ -752,7 +763,7 @@ function saveEdit() {
     dl:   document.getElementById('e-dl').value,
     hrs:  parseFloat(document.getElementById('e-hrs').value),
     pri:  document.getElementById('e-pri').value,
-    ph:   document.getElementById('e-ph').value,
+    tag:  document.getElementById('e-tag').value,
     note: document.getElementById('e-note').value.trim(),
   } : t);
   renderAll(); closeEditSheet(); markChanged();
@@ -767,7 +778,7 @@ function addTask() {
     dl: document.getElementById('f-dl').value,
     hrs: parseFloat(document.getElementById('f-hrs').value),
     pri: document.getElementById('f-pri').value,
-    ph: 'p4',
+    tag: document.getElementById('f-tag').value,
     done: false,
     note: document.getElementById('f-note').value.trim(),
   }];
@@ -823,33 +834,56 @@ async function runSchedule() {
     const label = `${date.getMonth()+1}月${date.getDate()}日(${DAYS_JP[dow]})`;
     const isWeekend = dow === 0 || dow === 6;
 
-    // Check if survey task is scheduled today
-    const hasSurvey = taskQueue.some(t => t.cat === 'survey');
-    let capacity = isWeekend
-      ? (hasSurvey ? hoursSurvey * 0.5 : hoursNormal * 0.5)
-      : (hasSurvey ? hoursSurvey : hoursNormal);
+    const totalCapacity = isWeekend ? hoursNormal * 0.5 : hoursNormal;
+    const surveyCapacity = isWeekend ? hoursSurvey * 0.5 : hoursSurvey;
 
     const dayTasks = [];
     let used = 0;
 
-    // Assign survey task first if exists
+    // ── Step 1: 期限超過タスクを最優先で詰める ──────────────
+    // 調査業務の最低保証時間（超過タスクがあっても最低2hは確保）
+    const MIN_SURVEY_H = taskQueue.some(t => t.cat === 'survey') ? 2 : 0;
+    const overdueSlots = Math.max(0, totalCapacity - MIN_SURVEY_H);
+
+    const overdueQueue = taskQueue.filter(t => t.cat !== 'survey' && t.dl && daysLeft(t.dl) < 0);
+    for (const t of overdueQueue) {
+      if (used >= overdueSlots) break;
+      if (used + t.hrs <= overdueSlots + 0.5) {
+        dayTasks.push({ id: t.id, name: t.name, cat: t.cat, hrs: t.hrs, note: '🚨 期限超過！最優先で対応' });
+        used += t.hrs;
+        taskQueue.splice(taskQueue.indexOf(t), 1);
+      }
+    }
+
+    // ── Step 2: 調査業務（残時間に収まる分だけ） ────────────
     const surveyIdx = taskQueue.findIndex(t => t.cat === 'survey');
     if (surveyIdx !== -1) {
       const st = taskQueue[surveyIdx];
-      const h = Math.min(st.hrs, isWeekend ? 3 : 6);
-      dayTasks.push({ id: st.id, name: st.name, cat: st.cat, hrs: h, note: '調査業務（通常稼働）' });
-      used += h;
-      taskQueue.splice(surveyIdx, 1);
+      // 残容量と通常調査時間の小さい方。ただし最低2hは確保（totalCapacity的に可能なら）
+      const remainAfterOverdue = totalCapacity - used;
+      const surveyH = Math.min(
+        st.hrs,
+        isWeekend ? 3 : 6,
+        Math.max(remainAfterOverdue, MIN_SURVEY_H)
+      );
+      if (surveyH > 0) {
+        const surveyNote = used > 0 ? `調査業務（期限超過タスク対応のため${surveyH}hに短縮）` : '調査業務（通常稼働）';
+        dayTasks.push({ id: st.id, name: st.name, cat: st.cat, hrs: surveyH, note: surveyNote });
+        used += surveyH;
+        taskQueue.splice(surveyIdx, 1);
+      }
     }
 
-    // Fill remaining capacity with other tasks
+    // ── Step 3: 残容量に通常タスクを詰める ──────────────────
+    const capacity = surveyCapacity; // 調査業務込みの上限
     let i = 0;
     while (i < taskQueue.length && used < capacity) {
       const t = taskQueue[i];
       if (t.cat === 'survey') { i++; continue; }
       if (used + t.hrs <= capacity + 0.5) {
-        const note = t.dl
-          ? (daysLeft(t.dl) <= 3 ? '⚠ 期限が迫っています！' : daysLeft(t.dl) <= 7 ? '今週中に完了を' : '')
+        const dl = t.dl ? daysLeft(t.dl) : null;
+        const note = dl !== null
+          ? (dl <= 0 ? '🚨 期限超過！最優先で対応' : dl <= 3 ? '⚠ 期限が迫っています！' : dl <= 7 ? '今週中に完了を' : '')
           : '';
         dayTasks.push({ id: t.id, name: t.name, cat: t.cat, hrs: t.hrs, note });
         used += t.hrs;
